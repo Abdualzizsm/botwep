@@ -228,9 +228,9 @@ def cleanup_old_files():
     """تنظيف الملفات القديمة."""
     downloader.cleanup_old_files(FILE_EXPIRY)
 
+# تنظيف الملفات القديمة عند تحميل الوحدة
+cleanup_old_files()
+
 if __name__ == '__main__':
-    # تنظيف الملفات القديمة عند بدء التشغيل
-    cleanup_old_files()
-    
     # تشغيل التطبيق
     app.run(debug=True)
