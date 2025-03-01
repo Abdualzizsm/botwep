@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify, send_file, abort, ur
 # إضافة المجلد الرئيسي إلى مسار النظام
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from config import DOWNLOAD_PATH, FILE_EXPIRY, MAX_FILE_SIZE
+from config import DOWNLOAD_PATH, FILE_EXPIRY, MAX_FILE_SIZE, BASE_URL
 from common.downloader import YouTubeDownloader
 
 # إعداد التسجيل
@@ -138,7 +138,12 @@ def download_video():
         download_sessions[session_id]['file_path'] = file_path
         
         # إنشاء رابط للتحميل
-        download_url = url_for('get_file', download_id=download_id, _external=True)
+        if os.environ.get('RENDER'):
+            # استخدام BASE_URL على Render
+            download_url = f"{BASE_URL}/api/file/{download_id}"
+        else:
+            # استخدام url_for المحلي
+            download_url = url_for('get_file', download_id=download_id, _external=True)
         
         return jsonify({
             'success': True,
