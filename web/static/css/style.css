@@ -1,0 +1,181 @@
+/* تخصيص الألوان والخطوط */
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --danger-color: #e74c3c;
+    --warning-color: #f39c12;
+    --dark-color: #2c3e50;
+    --light-color: #ecf0f1;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+/* تنسيق الرأس */
+header h1 {
+    color: var(--primary-color);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* تنسيق البطاقات */
+.card {
+    border-radius: 15px;
+    border: none;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+/* تنسيق الأزرار */
+.btn {
+    border-radius: 8px;
+    padding: 0.5rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #2980b9;
+    border-color: #2980b9;
+}
+
+.btn-success {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-success:hover {
+    background-color: #27ae60;
+    border-color: #27ae60;
+}
+
+/* تنسيق حقل الإدخال */
+.form-control {
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    border: 1px solid #ced4da;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(52, 152, 219, 0.25);
+}
+
+/* تنسيق قائمة التنسيقات */
+.list-group-item {
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(-5px);
+}
+
+.list-group-item.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* تنسيق شريط التقدم */
+.progress {
+    border-radius: 8px;
+    background-color: #e9ecef;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+/* تنسيق التبويبات */
+.nav-tabs .nav-link {
+    border-radius: 8px 8px 0 0;
+    font-weight: 600;
+    color: #6c757d;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--primary-color);
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+
+/* تنسيق الصورة المصغرة */
+#video-thumbnail {
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* تنسيق عنوان الفيديو */
+#video-title {
+    font-weight: 700;
+    color: var(--dark-color);
+}
+
+/* تنسيق التذييل */
+footer {
+    padding: 20px 0;
+    border-top: 1px solid #e9ecef;
+}
+
+/* تنسيقات متجاوبة */
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 20px;
+    }
+    
+    .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    #video-thumbnail {
+        margin-bottom: 15px;
+    }
+}
+
+/* تنسيق رسائل الخطأ */
+.alert-danger {
+    background-color: #ffebee;
+    color: var(--danger-color);
+    border-color: #ffcdd2;
+    border-radius: 8px;
+}
+
+/* تنسيق رسائل النجاح */
+.alert-success {
+    background-color: #e8f5e9;
+    color: var(--secondary-color);
+    border-color: #c8e6c9;
+    border-radius: 8px;
+}
+
+/* تأثيرات إضافية */
+.shadow-hover:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* تنسيق الأيقونات */
+.bi {
+    margin-right: 5px;
+}
+
+/* تنسيق مؤشر التحميل */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+    color: var(--primary-color);
+}
