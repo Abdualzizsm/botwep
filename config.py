@@ -12,8 +12,15 @@ WEB_HOST = os.getenv('WEB_HOST', '0.0.0.0')
 WEB_PORT = int(os.getenv('PORT', os.getenv('WEB_PORT', 5000)))
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
+# التحقق مما إذا كان التطبيق يعمل على Render
+ON_RENDER = os.getenv('RENDER', 'False').lower() == 'true'
+
 # مسار التحميل
-DOWNLOAD_PATH = os.getenv('DOWNLOAD_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'downloads'))
+if ON_RENDER:
+    # على Render، استخدم مجلد tmp
+    DOWNLOAD_PATH = '/tmp/youtube-downloader'
+else:
+    DOWNLOAD_PATH = os.getenv('DOWNLOAD_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'downloads'))
 
 # إنشاء مجلد التحميل إذا لم يكن موجودًا
 if not os.path.exists(DOWNLOAD_PATH):
