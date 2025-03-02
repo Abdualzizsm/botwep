@@ -4,10 +4,12 @@ import logging
 import threading
 from typing import Dict, Optional, Any
 
-from telegram import Update, ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update
+from telegram.constants import ParseMode
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
-    Updater, CommandHandler, MessageHandler, Filters,
-    CallbackQueryHandler, CallbackContext
+    Application, CommandHandler, MessageHandler, filters,
+    CallbackQueryHandler, ContextTypes
 )
 
 # إضافة المجلد الرئيسي إلى مسار النظام
@@ -33,7 +35,7 @@ downloader = YouTubeDownloader(DOWNLOAD_PATH)
 # قاموس لتخزين مهام التحميل النشطة
 active_downloads = {}
 
-def start(update: Update, context: CallbackContext) -> None:
+def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     معالجة أمر البدء /start.
     """
@@ -47,7 +49,7 @@ def start(update: Update, context: CallbackContext) -> None:
     
     update.message.reply_text(message)
 
-def help_command(update: Update, context: CallbackContext) -> None:
+def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     معالجة أمر المساعدة /help.
     """
@@ -73,7 +75,7 @@ def help_command(update: Update, context: CallbackContext) -> None:
     
     update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
 
-def cancel(update: Update, context: CallbackContext) -> None:
+def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     معالجة أمر الإلغاء /cancel.
     """
@@ -89,7 +91,7 @@ def cancel(update: Update, context: CallbackContext) -> None:
     
     update.message.reply_text("✅ تم إلغاء العملية الحالية.")
 
-def process_youtube_url(update: Update, context: CallbackContext) -> None:
+def process_youtube_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     معالجة رابط يوتيوب المرسل من المستخدم.
     """
@@ -153,7 +155,7 @@ def process_youtube_url(update: Update, context: CallbackContext) -> None:
             f"❌ حدث خطأ أثناء معالجة الرابط: {str(e)}"
         )
 
-def button_callback(update: Update, context: CallbackContext) -> None:
+def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     معالجة الضغط على الأزرار في لوحة المفاتيح المضمنة.
     """
@@ -237,7 +239,7 @@ def button_callback(update: Update, context: CallbackContext) -> None:
         
         return
 
-def download_and_send(context: CallbackContext, user_id: int, url: str, format_id: str, 
+def download_and_send(context: ContextTypes.DEFAULT_TYPE, user_id: int, url: str, format_id: str, 
                      format_type: str, chat_id: int, message_id: int) -> None:
     """
     تحميل الفيديو وإرساله للمستخدم.
@@ -330,7 +332,7 @@ def download_and_send(context: CallbackContext, user_id: int, url: str, format_i
         if user_id in active_downloads:
             del active_downloads[user_id]
 
-def error_handler(update: Update, context: CallbackContext) -> None:
+def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     معالجة الأخطاء.
     """
@@ -358,34 +360,33 @@ def main() -> None:
     """
     try:
         # إعداد البوت
-        updater = Updater(BOT_TOKEN)
-        dispatcher = updater.dispatcher
-
+        application = Application.builder().token(BOT_TOKEN).build()
+        
         # إضافة معالجات الأوامر
-        dispatcher.add_handler(CommandHandler("start", start))
-        dispatcher.add_handler(CommandHandler("help", help_command))
-        dispatcher.add_handler(CommandHandler("cancel", cancel))
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("cancel", cancel))
         
         # إضافة معالج الرسائل
-        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, process_youtube_url))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_youtube_url))
         
         # إضافة معالج الأزرار
-        dispatcher.add_handler(CallbackQueryHandler(button_callback))
+        application.add_handler(CallbackQueryHandler(button_callback))
         
         # إضافة معالج الأخطاء
-        dispatcher.add_error_handler(error_handler)
+        application.add_error_handler(error_handler)
         
         # إضافة مهمة دورية لتنظيف الملفات القديمة
-        updater.job_queue.run_repeating(lambda _: cleanup_task(), interval=3600, first=0)
+        application.job_queue.run_repeating(lambda _: cleanup_task(), interval=3600, first=0)
         
         # بدء تشغيل البوت
         logger.info("تم بدء تشغيل البوت!")
         
-        # استخدام طريقة start_polling مع تعيين clean=True لتجنب تعارضات getUpdates
-        updater.start_polling(clean=True, drop_pending_updates=True)
+        # استخدام طريقة run_polling مع تعيين clean=True لتجنب تعارضات getUpdates
+        application.run_polling(drop_pending_updates=True)
         
         # الانتظار حتى يتم إيقاف البوت
-        updater.idle()
+        application.idle()
         
     except Exception as e:
         logger.error(f"حدث خطأ: {str(e)}")

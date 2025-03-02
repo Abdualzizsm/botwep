@@ -419,3 +419,70 @@ class YouTubeDownloader:
             logger.info(f"اكتمل التحميل. حجم الملف: {d['downloaded_bytes'] / (1024*1024):.1f} ميجابايت")
         elif d['status'] == 'error':
             logger.error(f"خطأ في التحميل: {d.get('error', 'خطأ غير معروف')}")
+    
+    def is_valid_youtube_url(self, url: str) -> bool:
+        """
+        التحقق من صحة رابط يوتيوب
+        
+        Args:
+            url: الرابط المراد التحقق منه
+            
+        Returns:
+            True إذا كان الرابط صحيحًا، False خلاف ذلك
+        """
+        try:
+            # نمط بسيط للتحقق من روابط يوتيوب
+            youtube_patterns = [
+                r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+                r'^https?://(?:www\.)?youtube\.com/embed/[\w-]+',
+                r'^https?://(?:www\.)?youtube\.com/v/[\w-]+',
+                r'^https?://(?:www\.)?youtube\.com/shorts/[\w-]+',
+                r'^https?://youtu\.be/[\w-]+'
+            ]
+            
+            # التحقق من تطابق الرابط مع أي من الأنماط
+            for pattern in youtube_patterns:
+                if re.match(pattern, url):
+                    logger.info(f"تم التحقق من صحة رابط يوتيوب: {url}")
+                    return True
+                    
+            logger.warning(f"رابط غير صالح: {url}")
+            return False
+        except Exception as e:
+            logger.error(f"خطأ في التحقق من صحة الرابط: {str(e)}")
+            return False
+            
+    def cleanup_old_files(self, expiry_hours=24):
+        """
+        تنظيف الملفات القديمة من مجلد التحميل
+        
+        Args:
+            expiry_hours: عدد الساعات قبل اعتبار الملف قديمًا
+        """
+        logger.info(f"تنظيف الملفات القديمة (أقدم من {expiry_hours} ساعة)...")
+        try:
+            current_time = time.time()
+            expiry_seconds = expiry_hours * 3600
+            
+            # التحقق من وجود المجلد
+            if not os.path.exists(self.download_path):
+                logger.warning(f"مجلد التحميل غير موجود: {self.download_path}")
+                return
+                
+            # مسح الملفات القديمة
+            count = 0
+            for filename in os.listdir(self.download_path):
+                file_path = os.path.join(self.download_path, filename)
+                if os.path.isfile(file_path):
+                    file_age = current_time - os.path.getmtime(file_path)
+                    if file_age > expiry_seconds:
+                        try:
+                            os.remove(file_path)
+                            count += 1
+                            logger.info(f"تم حذف الملف القديم: {filename}")
+                        except Exception as e:
+                            logger.error(f"خطأ في حذف الملف {filename}: {str(e)}")
+            
+            logger.info(f"تم حذف {count} ملفات قديمة")
+        except Exception as e:
+            logger.error(f"خطأ في تنظيف الملفات القديمة: {str(e)}")

@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import CallbackContext
+from telegram.ext import ContextTypes
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -146,7 +146,7 @@ def format_video_info(video_info: Any) -> str:
         f"الرجاء اختيار تنسيق التحميل:"
     )
 
-def update_progress_message(context: CallbackContext, chat_id: int, message_id: int, 
+def update_progress_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, 
                            status: str, downloaded: int, total: int, eta: int) -> None:
     """
     تحديث رسالة التقدم أثناء التحميل.

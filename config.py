@@ -9,7 +9,8 @@ BOT_TOKEN = os.getenv('BOT_TOKEN', '7865143004:AAHx7HMah28CkHkBNmS8uEML-GAzJ6qF8
 
 # تكوين تطبيق الويب
 WEB_HOST = os.getenv('WEB_HOST', '0.0.0.0')
-WEB_PORT = int(os.getenv('PORT', os.getenv('WEB_PORT', 5000)))
+# استخدام بورت 5001 للاختبار المحلي لتجنب تعارض البورت 5000 مع AirPlay
+WEB_PORT = int(os.getenv('PORT', os.getenv('WEB_PORT', 5001)))
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # التحقق مما إذا كان التطبيق يعمل على Render
@@ -26,8 +27,8 @@ else:
 if not os.path.exists(DOWNLOAD_PATH):
     os.makedirs(DOWNLOAD_PATH)
 
-# الحد الأقصى لحجم الملف (بالبايت) - 50 ميجابايت افتراضيًا
-MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 50 * 1024 * 1024))
+# الحد الأقصى لحجم الملف (بالبايت) - 200 ميجابايت افتراضيًا
+MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 200 * 1024 * 1024))
 
 # مدة انتهاء صلاحية الملفات المؤقتة (بالثواني) - 24 ساعة افتراضيًا
 FILE_EXPIRY = int(os.getenv('FILE_EXPIRY', 24 * 60 * 60))

@@ -51,7 +51,7 @@ def extract_info():
     
     try:
         # استخراج معلومات الفيديو
-        video_info = downloader.extract_video_info(url)
+        video_info = downloader.get_video_info(url)
         
         # إنشاء معرف جلسة فريد
         session_id = str(uuid.uuid4())
