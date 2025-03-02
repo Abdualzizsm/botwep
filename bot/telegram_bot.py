@@ -13,7 +13,7 @@ from telegram.ext import (
 # إضافة المجلد الرئيسي إلى مسار النظام
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from config import BOT_TOKEN, DOWNLOAD_PATH, FILE_EXPIRY, MAX_FILE_SIZE
+from config import BOT_TOKEN, DOWNLOAD_PATH, FILE_EXPIRY, MAX_FILE_SIZE, BASE_URL
 from common.downloader import YouTubeDownloader
 from bot.utils import (
     user_data_cache, format_video_info, create_format_keyboard,
@@ -42,7 +42,7 @@ def start(update: Update, context: CallbackContext) -> None:
         f"👋 مرحبًا {user.first_name}!\n\n"
         f"أنا بوت تحميل فيديوهات يوتيوب. 🎬\n\n"
         f"ما عليك سوى إرسال رابط فيديو يوتيوب إلي وسأساعدك في تحميله بالتنسيق والجودة التي تفضلها.\n\n"
-        f"يمكنك أيضًا زيارة موقعنا على الويب للتحميل: http://localhost:5000"
+        f"يمكنك أيضًا زيارة موقعنا على الويب للتحميل: {BASE_URL}"
     )
     
     update.message.reply_text(message)
