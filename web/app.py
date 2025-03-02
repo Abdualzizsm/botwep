@@ -3,13 +3,14 @@ import sys
 import json
 import uuid
 import logging
+import threading
 from typing import Dict, Optional, Any, List
 from flask import Flask, render_template, request, jsonify, send_file, abort, url_for
 
 # إضافة المجلد الرئيسي إلى مسار النظام
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from config import DOWNLOAD_PATH, FILE_EXPIRY, MAX_FILE_SIZE, BASE_URL
+from config import DOWNLOAD_PATH, FILE_EXPIRY, MAX_FILE_SIZE, BASE_URL, ON_RENDER
 from common.downloader import YouTubeDownloader
 
 # إعداد التسجيل
@@ -27,6 +28,8 @@ downloader = YouTubeDownloader(DOWNLOAD_PATH)
 
 # قاموس لتخزين معلومات التحميل
 download_sessions = {}
+# قفل للتزامن
+sessions_lock = threading.Lock()
 
 @app.route('/')
 def index():
@@ -50,32 +53,23 @@ def extract_info():
         # استخراج معلومات الفيديو
         video_info = downloader.extract_video_info(url)
         
-        if not video_info:
-            return jsonify({'error': 'لم يتم العثور على معلومات الفيديو. الرجاء التحقق من الرابط والمحاولة مرة أخرى.'}), 400
-        
         # إنشاء معرف جلسة فريد
         session_id = str(uuid.uuid4())
         
-        # تخزين معلومات الفيديو في الجلسة
-        download_sessions[session_id] = {
-            'url': url,
+        # تخزين معلومات الجلسة
+        with sessions_lock:
+            download_sessions[session_id] = {
+                'url': url,
+                'video_info': video_info,
+                'created_at': os.path.getmtime(__file__),  # وقت الإنشاء
+            }
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
             'video_info': video_info
-        }
-        
-        # تحويل معلومات الفيديو إلى قاموس
-        video_data = {
-            'id': video_info.video_id,
-            'title': video_info.title,
-            'thumbnail': video_info.thumbnail,
-            'duration': video_info.duration,
-            'author': video_info.author,
-            'views': video_info.views,
-            'formats': video_info.formats,
-            'session_id': session_id
-        }
-        
-        return jsonify({'success': True, 'video': video_data})
-        
+        })
+    
     except Exception as e:
         logger.error(f"خطأ في استخراج معلومات الفيديو: {str(e)}")
         return jsonify({'error': f'حدث خطأ أثناء معالجة الرابط: {str(e)}'}), 500
@@ -92,26 +86,29 @@ def download_video():
         return jsonify({'error': 'بيانات غير كاملة'}), 400
     
     # التحقق من وجود الجلسة
-    if session_id not in download_sessions:
-        return jsonify({'error': 'انتهت صلاحية الجلسة. الرجاء إعادة استخراج معلومات الفيديو.'}), 400
+    with sessions_lock:
+        if session_id not in download_sessions:
+            return jsonify({'error': 'انتهت صلاحية الجلسة. الرجاء إعادة استخراج معلومات الفيديو.'}), 400
     
     try:
         # الحصول على معلومات الجلسة
-        session_data = download_sessions[session_id]
+        with sessions_lock:
+            session_data = download_sessions[session_id]
         url = session_data['url']
         
         # إنشاء معرف تحميل فريد
         download_id = str(uuid.uuid4())
         
         # تخزين معلومات التحميل
-        download_sessions[session_id]['download_id'] = download_id
-        download_sessions[session_id]['format_id'] = format_id
-        download_sessions[session_id]['format_type'] = format_type
-        download_sessions[session_id]['status'] = 'preparing'
-        download_sessions[session_id]['progress'] = 0
+        with sessions_lock:
+            download_sessions[session_id]['download_id'] = download_id
+            download_sessions[session_id]['format_id'] = format_id
+            download_sessions[session_id]['format_type'] = format_type
+            download_sessions[session_id]['status'] = 'preparing'
+            download_sessions[session_id]['progress'] = 0
         
-        # بدء التحميل في خلفية العملية (في تطبيق حقيقي، يجب استخدام Celery أو خيوط)
-        # هنا نستخدم طريقة مبسطة للتوضيح
+        # بدء التحميل (في تطبيق حقيقي، يجب استخدام Celery أو خيوط)
+        logger.info(f"بدء تحميل {format_type} بمعرف {format_id} من الرابط {url}")
         
         # تحميل الفيديو أو الصوت
         if format_type == 'video':
@@ -121,10 +118,13 @@ def download_video():
         
         # التحقق من نجاح التحميل
         if not file_path or not os.path.exists(file_path):
+            logger.error(f"فشل التحميل: لم يتم إنشاء الملف {file_path}")
             return jsonify({'error': 'فشل التحميل. الرجاء المحاولة مرة أخرى.'}), 500
         
         # التحقق من حجم الملف
         file_size = os.path.getsize(file_path)
+        logger.info(f"تم التحميل بنجاح. حجم الملف: {file_size/(1024*1024):.1f} ميجابايت")
+        
         if file_size > MAX_FILE_SIZE:
             # حذف الملف
             os.remove(file_path)
@@ -133,17 +133,20 @@ def download_video():
             }), 400
         
         # تحديث حالة التحميل
-        download_sessions[session_id]['status'] = 'completed'
-        download_sessions[session_id]['progress'] = 100
-        download_sessions[session_id]['file_path'] = file_path
+        with sessions_lock:
+            download_sessions[session_id]['status'] = 'completed'
+            download_sessions[session_id]['progress'] = 100
+            download_sessions[session_id]['file_path'] = file_path
         
         # إنشاء رابط للتحميل
-        if os.environ.get('RENDER'):
+        if ON_RENDER:
             # استخدام BASE_URL على Render
             download_url = f"{BASE_URL}/api/file/{download_id}"
+            logger.info(f"تم إنشاء رابط تحميل Render: {download_url}")
         else:
             # استخدام url_for المحلي
             download_url = url_for('get_file', download_id=download_id, _external=True)
+            logger.info(f"تم إنشاء رابط تحميل محلي: {download_url}")
         
         return jsonify({
             'success': True,

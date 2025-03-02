@@ -33,4 +33,9 @@ MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 50 * 1024 * 1024))
 FILE_EXPIRY = int(os.getenv('FILE_EXPIRY', 24 * 60 * 60))
 
 # عنوان الموقع للوصول إلى الملفات
-BASE_URL = os.getenv('BASE_URL', 'http://localhost:5000')
+if ON_RENDER:
+    # استخدام عنوان Render
+    render_service = os.getenv('RENDER_SERVICE_NAME', 'botwep')
+    BASE_URL = f"https://{render_service}.onrender.com"
+else:
+    BASE_URL = os.getenv('BASE_URL', 'http://localhost:5000')

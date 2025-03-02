@@ -356,35 +356,39 @@ def main() -> None:
     """
     الدالة الرئيسية لتشغيل البوت.
     """
-    # إنشاء محدث
-    updater = Updater(BOT_TOKEN)
-    
-    # الحصول على المرسل
-    dispatcher = updater.dispatcher
-    
-    # إضافة معالجات الأوامر
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("help", help_command))
-    dispatcher.add_handler(CommandHandler("cancel", cancel))
-    
-    # إضافة معالج الرسائل
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, process_youtube_url))
-    
-    # إضافة معالج الأزرار
-    dispatcher.add_handler(CallbackQueryHandler(button_callback))
-    
-    # إضافة معالج الأخطاء
-    dispatcher.add_error_handler(error_handler)
-    
-    # إضافة مهمة دورية لتنظيف الملفات القديمة
-    updater.job_queue.run_repeating(lambda _: cleanup_task(), interval=3600, first=0)
-    
-    # بدء البوت
-    updater.start_polling()
-    logger.info("تم بدء تشغيل البوت!")
-    
-    # الانتظار حتى يتم إيقاف البوت
-    updater.idle()
+    try:
+        # إعداد البوت
+        updater = Updater(BOT_TOKEN)
+        dispatcher = updater.dispatcher
+
+        # إضافة معالجات الأوامر
+        dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(CommandHandler("help", help_command))
+        dispatcher.add_handler(CommandHandler("cancel", cancel))
+        
+        # إضافة معالج الرسائل
+        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, process_youtube_url))
+        
+        # إضافة معالج الأزرار
+        dispatcher.add_handler(CallbackQueryHandler(button_callback))
+        
+        # إضافة معالج الأخطاء
+        dispatcher.add_error_handler(error_handler)
+        
+        # إضافة مهمة دورية لتنظيف الملفات القديمة
+        updater.job_queue.run_repeating(lambda _: cleanup_task(), interval=3600, first=0)
+        
+        # بدء تشغيل البوت
+        logger.info("تم بدء تشغيل البوت!")
+        
+        # استخدام طريقة start_polling مع تعيين clean=True لتجنب تعارضات getUpdates
+        updater.start_polling(clean=True, drop_pending_updates=True)
+        
+        # الانتظار حتى يتم إيقاف البوت
+        updater.idle()
+        
+    except Exception as e:
+        logger.error(f"حدث خطأ: {str(e)}")
 
 if __name__ == '__main__':
     main()
