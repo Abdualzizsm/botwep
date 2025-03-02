@@ -348,13 +348,14 @@ def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         pass
 
-def cleanup_task() -> None:
+def cleanup_task():
     """
     مهمة دورية لتنظيف الملفات القديمة.
     """
     downloader.cleanup_old_files(FILE_EXPIRY)
-    
-def main() -> None:
+    logger.info(f"تم تنظيف الملفات القديمة (أكثر من {FILE_EXPIRY} ساعة)")
+
+async def main():
     """
     الدالة الرئيسية لتشغيل البوت.
     """
@@ -382,14 +383,17 @@ def main() -> None:
         # بدء تشغيل البوت
         logger.info("تم بدء تشغيل البوت!")
         
-        # استخدام طريقة run_polling مع تعيين clean=True لتجنب تعارضات getUpdates
-        application.run_polling(drop_pending_updates=True)
+        # استخدام طريقة run_polling مع تعيين drop_pending_updates=True لتجنب تعارضات getUpdates
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(drop_pending_updates=True)
         
         # الانتظار حتى يتم إيقاف البوت
-        application.idle()
+        await application.updater.idle()
         
     except Exception as e:
         logger.error(f"حدث خطأ: {str(e)}")
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())

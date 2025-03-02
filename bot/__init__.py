@@ -1,4 +1,5 @@
 import os
+import asyncio
 from bot.telegram_bot import main as _start_bot
 
 def start_bot():
@@ -11,4 +12,10 @@ def start_bot():
         return
     
     # تشغيل البوت فقط إذا كان مُمكّنًا
-    _start_bot()
+    try:
+        # استخدام asyncio لتشغيل الدالة غير المتزامنة
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(_start_bot())
+    except Exception as e:
+        print(f"خطأ في تشغيل البوت: {str(e)}")
