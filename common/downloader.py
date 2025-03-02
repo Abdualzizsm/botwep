@@ -2,6 +2,8 @@ import os
 import time
 import uuid
 import logging
+import subprocess
+import shutil
 from typing import Dict, List, Optional, Tuple, Callable, Any
 import yt_dlp
 from pytube import YouTube
@@ -39,7 +41,22 @@ class YouTubeDownloader:
         self.download_path = download_path
         if not os.path.exists(download_path):
             os.makedirs(download_path)
+        
+        # التحقق من وجود FFmpeg
+        self._check_ffmpeg()
     
+    def _check_ffmpeg(self):
+        """التحقق من وجود FFmpeg على النظام."""
+        try:
+            # محاولة تنفيذ أمر FFmpeg
+            result = subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if result.returncode != 0:
+                logger.warning("FFmpeg غير موجود أو لا يعمل بشكل صحيح. قد لا تعمل بعض الوظائف.")
+            else:
+                logger.info("تم العثور على FFmpeg بنجاح.")
+        except Exception as e:
+            logger.warning(f"خطأ أثناء التحقق من FFmpeg: {str(e)}")
+
     def extract_video_info(self, url: str) -> Optional[VideoInfo]:
         """
         استخراج معلومات الفيديو من رابط YouTube.
@@ -137,12 +154,22 @@ class YouTubeDownloader:
             file_id = str(uuid.uuid4())
             temp_path = os.path.join(self.download_path, f"{file_id}_temp")
             
+            # تسجيل معلومات التنزيل
+            logger.info(f"بدء تحميل الفيديو: {url} بتنسيق: {format_id}")
+            logger.info(f"مسار التنزيل المؤقت: {temp_path}")
+            
+            # التحقق من وجود المجلد
+            if not os.path.exists(self.download_path):
+                os.makedirs(self.download_path)
+                logger.info(f"تم إنشاء مجلد التنزيل: {self.download_path}")
+            
             # تكوين خيارات yt-dlp
             ydl_opts = {
                 'format': format_id,
                 'outtmpl': f"{temp_path}.%(ext)s",
-                'quiet': True,
-                'no_warnings': True,
+                'quiet': False,  # تمكين الإخراج للتصحيح
+                'no_warnings': False,  # عرض التحذيرات للتصحيح
+                'verbose': True,  # تمكين الإخراج المفصل
             }
             
             # إضافة دالة استدعاء التقدم إذا تم توفيرها
@@ -157,6 +184,8 @@ class YouTubeDownloader:
                 info = ydl.extract_info(url, download=True)
                 downloaded_file = ydl.prepare_filename(info)
                 
+                logger.info(f"تم تحميل الملف: {downloaded_file}")
+                
                 # تحديد المسار النهائي
                 _, ext = os.path.splitext(downloaded_file)
                 final_path = os.path.join(self.download_path, f"{file_id}{ext}")
@@ -164,7 +193,10 @@ class YouTubeDownloader:
                 # إعادة تسمية الملف
                 if os.path.exists(downloaded_file):
                     os.rename(downloaded_file, final_path)
+                    logger.info(f"تم نقل الملف إلى: {final_path}")
                     return final_path
+                else:
+                    logger.error(f"الملف المحمل غير موجود: {downloaded_file}")
                 
                 return None
                 
@@ -193,8 +225,9 @@ class YouTubeDownloader:
             ydl_opts = {
                 'format': format_id,
                 'outtmpl': output_path,
-                'quiet': True,
-                'no_warnings': True,
+                'quiet': False,  # تمكين الإخراج للتصحيح
+                'no_warnings': False,  # عرض التحذيرات للتصحيح
+                'verbose': True,  # تمكين الإخراج المفصل
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',

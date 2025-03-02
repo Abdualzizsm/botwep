@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # استيراد البوت
-from bot.bot import start_bot
+from bot import start_bot
 
 # تشغيل البوت في خيط منفصل
 def run_bot():
