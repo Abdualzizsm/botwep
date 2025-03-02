@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackContext
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -146,7 +146,7 @@ def format_video_info(video_info: Any) -> str:
         f"الرجاء اختيار تنسيق التحميل:"
     )
 
-def update_progress_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, 
+async def update_progress_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, 
                            status: str, downloaded: int, total: int, eta: int) -> None:
     """
     تحديث رسالة التقدم أثناء التحميل.
@@ -185,7 +185,7 @@ def update_progress_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, me
         text = f"ℹ️ *حالة التحميل:* {status}"
     
     try:
-        context.bot.edit_message_text(
+        await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,
             text=text,
@@ -219,3 +219,13 @@ def clean_user_data(user_id: int) -> None:
     """
     if user_id in user_data_cache:
         del user_data_cache[user_id]
+
+async def check_context_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    دالة للتحقق من نوع context
+    """
+    if not isinstance(context, CallbackContext):
+        logger.error(f"نوع context غير صحيح: {type(context)}")
+        return
+    
+    logger.info(f"نوع context صحيح: {type(context)}")
