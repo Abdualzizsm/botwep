@@ -1,12 +1,20 @@
 import os
-import time
-import uuid
 import logging
 import subprocess
+import re
+import time
 import shutil
-from typing import Dict, List, Optional, Tuple, Callable, Any
-import yt_dlp
-from pytube import YouTube
+from typing import Dict, List, Optional, Tuple, Union
+
+# استيراد المكتبات
+try:
+    import yt_dlp as youtube_dl
+    USE_YT_DLP = True
+    logging.info("تم استخدام yt-dlp للتحميل")
+except ImportError:
+    import pytube
+    USE_YT_DLP = False
+    logging.info("تم استخدام pytube للتحميل")
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -15,299 +23,399 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class VideoInfo:
-    """فئة تمثل معلومات الفيديو المستخرجة من YouTube."""
-    
-    def __init__(self, video_id: str, title: str, thumbnail: str, duration: int, 
-                 formats: List[Dict[str, Any]], author: str, views: int):
-        self.video_id = video_id
-        self.title = title
-        self.thumbnail = thumbnail
-        self.duration = duration
-        self.formats = formats
-        self.author = author
-        self.views = views
-
 class YouTubeDownloader:
-    """فئة للتعامل مع تحميل فيديوهات YouTube."""
-    
     def __init__(self, download_path: str):
         """
-        تهيئة محمل YouTube.
+        تهيئة محمل يوتيوب
         
         Args:
-            download_path: المسار الذي سيتم حفظ الملفات فيه
+            download_path: مسار مجلد التحميل
         """
         self.download_path = download_path
-        if not os.path.exists(download_path):
-            os.makedirs(download_path)
         
         # التحقق من وجود FFmpeg
-        self._check_ffmpeg()
+        self.has_ffmpeg = self._check_ffmpeg()
+        if self.has_ffmpeg:
+            logger.info("تم العثور على FFmpeg بنجاح.")
+        else:
+            logger.warning("لم يتم العثور على FFmpeg. بعض الميزات قد لا تعمل بشكل صحيح.")
     
-    def _check_ffmpeg(self):
-        """التحقق من وجود FFmpeg على النظام."""
+    def _check_ffmpeg(self) -> bool:
+        """التحقق من وجود FFmpeg على النظام"""
         try:
-            # محاولة تنفيذ أمر FFmpeg
-            result = subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if result.returncode != 0:
-                logger.warning("FFmpeg غير موجود أو لا يعمل بشكل صحيح. قد لا تعمل بعض الوظائف.")
-            else:
-                logger.info("تم العثور على FFmpeg بنجاح.")
-        except Exception as e:
-            logger.warning(f"خطأ أثناء التحقق من FFmpeg: {str(e)}")
-
-    def extract_video_info(self, url: str) -> Optional[VideoInfo]:
+            subprocess.run(
+                ["ffmpeg", "-version"], 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE
+            )
+            return True
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
+    
+    def get_video_info(self, url: str) -> Dict:
         """
-        استخراج معلومات الفيديو من رابط YouTube.
+        الحصول على معلومات الفيديو
         
         Args:
-            url: رابط فيديو YouTube
+            url: رابط الفيديو
             
         Returns:
-            كائن VideoInfo يحتوي على معلومات الفيديو أو None إذا فشلت العملية
+            قاموس يحتوي على معلومات الفيديو
         """
+        logger.info(f"جاري استخراج معلومات الفيديو من: {url}")
+        
         try:
-            # استخدام yt-dlp لاستخراج المعلومات
-            ydl_opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'skip_download': True,
-                'format': 'best',
-            }
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if USE_YT_DLP:
+                return self._get_video_info_ytdlp(url)
+            else:
+                return self._get_video_info_pytube(url)
+        except Exception as e:
+            logger.error(f"خطأ في استخراج معلومات الفيديو: {str(e)}")
+            raise
+    
+    def _get_video_info_ytdlp(self, url: str) -> Dict:
+        """الحصول على معلومات الفيديو باستخدام yt-dlp"""
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'format': 'best',
+            'ignoreerrors': True,
+        }
+        
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            try:
                 info = ydl.extract_info(url, download=False)
+                if info is None:
+                    raise ValueError("لم يتم العثور على معلومات الفيديو")
                 
-                # تنظيم تنسيقات الفيديو والصوت
+                # تنسيق المعلومات
                 formats = []
                 
                 # إضافة تنسيقات الفيديو
-                for fmt in info.get('formats', []):
-                    if fmt.get('vcodec') != 'none' and fmt.get('acodec') != 'none':
-                        resolution = fmt.get('height', 0)
-                        if resolution > 0:
-                            formats.append({
-                                'format_id': fmt['format_id'],
-                                'ext': fmt.get('ext', 'mp4'),
-                                'resolution': f"{resolution}p",
-                                'filesize': fmt.get('filesize', 0),
-                                'type': 'video'
-                            })
+                video_formats = [f for f in info.get('formats', []) 
+                                if f.get('vcodec', 'none') != 'none' and f.get('acodec', 'none') != 'none']
                 
-                # إضافة تنسيقات الصوت
-                audio_formats = [fmt for fmt in info.get('formats', []) 
-                                if fmt.get('vcodec') == 'none' and fmt.get('acodec') != 'none']
+                # ترتيب حسب الدقة (من الأعلى إلى الأدنى)
+                video_formats.sort(key=lambda x: (
+                    x.get('height', 0) or 0, 
+                    x.get('width', 0) or 0,
+                    x.get('tbr', 0) or 0
+                ), reverse=True)
                 
-                for fmt in audio_formats:
+                # إضافة تنسيقات الفيديو المميزة
+                for fmt in video_formats:
+                    height = fmt.get('height', 0)
+                    if height and height >= 360:  # تجاهل الدقة المنخفضة جدًا
+                        formats.append({
+                            'id': fmt['format_id'],
+                            'type': 'video',
+                            'quality': f"{height}p",
+                            'extension': fmt.get('ext', 'mp4'),
+                            'size': fmt.get('filesize') or fmt.get('filesize_approx'),
+                            'tbr': fmt.get('tbr'),  # معدل البت الإجمالي
+                        })
+                
+                # إضافة تنسيقات الصوت فقط
+                audio_formats = [f for f in info.get('formats', []) 
+                                if f.get('vcodec', 'none') == 'none' and f.get('acodec', 'none') != 'none']
+                
+                # ترتيب حسب معدل البت (من الأعلى إلى الأدنى)
+                audio_formats.sort(key=lambda x: x.get('abr', 0) or 0, reverse=True)
+                
+                # إضافة أفضل تنسيق صوتي
+                if audio_formats:
+                    best_audio = audio_formats[0]
                     formats.append({
-                        'format_id': fmt['format_id'],
-                        'ext': 'mp3',  # سنحول إلى mp3
-                        'resolution': f"{fmt.get('abr', 128)}kbps",
-                        'filesize': fmt.get('filesize', 0),
-                        'type': 'audio'
+                        'id': best_audio['format_id'],
+                        'type': 'audio',
+                        'quality': f"{int(best_audio.get('abr', 128))}kbps",
+                        'extension': best_audio.get('ext', 'mp3'),
+                        'size': best_audio.get('filesize') or best_audio.get('filesize_approx'),
+                        'abr': best_audio.get('abr'),  # معدل بت الصوت
                     })
                 
-                # إزالة التكرارات وترتيب التنسيقات
-                unique_formats = {}
-                for fmt in formats:
-                    key = f"{fmt['type']}_{fmt['resolution']}"
-                    if key not in unique_formats or fmt['filesize'] > unique_formats[key]['filesize']:
-                        unique_formats[key] = fmt
-                
-                sorted_formats = sorted(
-                    unique_formats.values(),
-                    key=lambda x: (
-                        0 if x['type'] == 'video' else 1,
-                        -int(x['resolution'].replace('p', '').replace('kbps', ''))
-                    )
-                )
-                
-                return VideoInfo(
-                    video_id=info['id'],
-                    title=info['title'],
-                    thumbnail=info.get('thumbnail', ''),
-                    duration=info.get('duration', 0),
-                    formats=sorted_formats,
-                    author=info.get('uploader', ''),
-                    views=info.get('view_count', 0)
-                )
-                
-        except Exception as e:
-            logger.error(f"خطأ في استخراج معلومات الفيديو: {str(e)}")
-            return None
+                return {
+                    'title': info.get('title', 'فيديو بدون عنوان'),
+                    'thumbnail': info.get('thumbnail', ''),
+                    'duration': info.get('duration', 0),
+                    'channel': info.get('uploader', 'غير معروف'),
+                    'formats': formats
+                }
+            except Exception as e:
+                logger.error(f"خطأ في yt-dlp: {str(e)}")
+                raise
     
-    def download_video(self, url: str, format_id: str, progress_callback: Optional[Callable] = None) -> Optional[str]:
+    def _get_video_info_pytube(self, url: str) -> Dict:
+        """الحصول على معلومات الفيديو باستخدام pytube"""
+        try:
+            yt = pytube.YouTube(url)
+            
+            # تنسيق المعلومات
+            formats = []
+            
+            # إضافة تنسيقات الفيديو
+            for stream in yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc():
+                if stream.resolution:
+                    formats.append({
+                        'id': str(stream.itag),
+                        'type': 'video',
+                        'quality': stream.resolution,
+                        'extension': stream.subtype,
+                        'size': stream.filesize,
+                    })
+            
+            # إضافة تنسيق الصوت
+            audio_stream = yt.streams.filter(only_audio=True).order_by('abr').desc().first()
+            if audio_stream:
+                formats.append({
+                    'id': str(audio_stream.itag),
+                    'type': 'audio',
+                    'quality': audio_stream.abr,
+                    'extension': 'mp3',  # سيتم تحويله إلى mp3
+                    'size': audio_stream.filesize,
+                })
+            
+            return {
+                'title': yt.title,
+                'thumbnail': yt.thumbnail_url,
+                'duration': yt.length,
+                'channel': yt.author,
+                'formats': formats
+            }
+        except Exception as e:
+            logger.error(f"خطأ في pytube: {str(e)}")
+            raise
+    
+    def download_video(self, url: str, format_id: str) -> Optional[str]:
         """
-        تحميل فيديو من YouTube.
+        تحميل الفيديو
         
         Args:
-            url: رابط فيديو YouTube
-            format_id: معرف التنسيق المطلوب تحميله
-            progress_callback: دالة استدعاء لتحديث التقدم
+            url: رابط الفيديو
+            format_id: معرف التنسيق
             
         Returns:
-            مسار الملف المحمل أو None إذا فشلت العملية
+            مسار الملف المحمل أو None في حالة الفشل
         """
+        logger.info(f"بدء تحميل الفيديو من {url} بتنسيق {format_id}")
+        
         try:
-            # إنشاء اسم ملف فريد
-            file_id = str(uuid.uuid4())
-            temp_path = os.path.join(self.download_path, f"{file_id}_temp")
-            
-            # تسجيل معلومات التنزيل
-            logger.info(f"بدء تحميل الفيديو: {url} بتنسيق: {format_id}")
-            logger.info(f"مسار التنزيل المؤقت: {temp_path}")
-            
-            # التحقق من وجود المجلد
-            if not os.path.exists(self.download_path):
-                os.makedirs(self.download_path)
-                logger.info(f"تم إنشاء مجلد التنزيل: {self.download_path}")
-            
-            # تكوين خيارات yt-dlp
-            ydl_opts = {
-                'format': format_id,
-                'outtmpl': f"{temp_path}.%(ext)s",
-                'quiet': False,  # تمكين الإخراج للتصحيح
-                'no_warnings': False,  # عرض التحذيرات للتصحيح
-                'verbose': True,  # تمكين الإخراج المفصل
-            }
-            
-            # إضافة دالة استدعاء التقدم إذا تم توفيرها
-            if progress_callback:
-                ydl_opts['progress_hooks'] = [
-                    lambda d: progress_callback(d['status'], d.get('downloaded_bytes', 0), 
-                                               d.get('total_bytes', 0), d.get('eta', 0))
-                ]
-            
-            # تحميل الفيديو
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                downloaded_file = ydl.prepare_filename(info)
-                
-                logger.info(f"تم تحميل الملف: {downloaded_file}")
-                
-                # تحديد المسار النهائي
-                _, ext = os.path.splitext(downloaded_file)
-                final_path = os.path.join(self.download_path, f"{file_id}{ext}")
-                
-                # إعادة تسمية الملف
-                if os.path.exists(downloaded_file):
-                    os.rename(downloaded_file, final_path)
-                    logger.info(f"تم نقل الملف إلى: {final_path}")
-                    return final_path
-                else:
-                    logger.error(f"الملف المحمل غير موجود: {downloaded_file}")
-                
-                return None
-                
+            if USE_YT_DLP:
+                return self._download_video_ytdlp(url, format_id)
+            else:
+                return self._download_video_pytube(url, format_id)
         except Exception as e:
             logger.error(f"خطأ في تحميل الفيديو: {str(e)}")
+            # طباعة تفاصيل الخطأ للتصحيح
+            import traceback
+            logger.error(traceback.format_exc())
             return None
     
-    def download_audio(self, url: str, format_id: str, progress_callback: Optional[Callable] = None) -> Optional[str]:
+    def _download_video_ytdlp(self, url: str, format_id: str) -> Optional[str]:
+        """تحميل الفيديو باستخدام yt-dlp"""
+        # إنشاء اسم ملف فريد
+        timestamp = int(time.time())
+        output_template = os.path.join(self.download_path, f'video_{timestamp}_%(id)s.%(ext)s')
+        
+        ydl_opts = {
+            'format': format_id,
+            'outtmpl': output_template,
+            'quiet': False,
+            'no_warnings': False,
+            'ignoreerrors': True,
+            'nooverwrites': True,
+            'progress_hooks': [self._progress_hook],
+        }
+        
+        try:
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                logger.info(f"بدء تحميل الفيديو باستخدام yt-dlp: {url}")
+                info = ydl.extract_info(url, download=True)
+                
+                if info is None:
+                    logger.error("فشل في استخراج معلومات الفيديو")
+                    return None
+                
+                # الحصول على مسار الملف المحمل
+                if 'requested_downloads' in info and info['requested_downloads']:
+                    file_path = info['requested_downloads'][0].get('filepath')
+                    if file_path and os.path.exists(file_path):
+                        logger.info(f"تم تحميل الفيديو بنجاح: {file_path}")
+                        return file_path
+                
+                # محاولة بديلة للعثور على الملف
+                video_id = info.get('id', '')
+                ext = info.get('ext', 'mp4')
+                expected_file = os.path.join(self.download_path, f'video_{timestamp}_{video_id}.{ext}')
+                
+                if os.path.exists(expected_file):
+                    logger.info(f"تم العثور على الملف المحمل: {expected_file}")
+                    return expected_file
+                
+                logger.error("لم يتم العثور على الملف المحمل")
+                return None
+        except Exception as e:
+            logger.error(f"خطأ في yt-dlp أثناء التحميل: {str(e)}")
+            return None
+    
+    def _download_video_pytube(self, url: str, format_id: str) -> Optional[str]:
+        """تحميل الفيديو باستخدام pytube"""
+        try:
+            yt = pytube.YouTube(url)
+            stream = yt.streams.get_by_itag(int(format_id))
+            
+            if not stream:
+                logger.error(f"لم يتم العثور على التنسيق المطلوب: {format_id}")
+                return None
+            
+            # تحميل الفيديو
+            logger.info(f"بدء تحميل الفيديو باستخدام pytube: {url}")
+            file_path = stream.download(output_path=self.download_path)
+            
+            if os.path.exists(file_path):
+                logger.info(f"تم تحميل الفيديو بنجاح: {file_path}")
+                return file_path
+            else:
+                logger.error("لم يتم العثور على الملف المحمل")
+                return None
+        except Exception as e:
+            logger.error(f"خطأ في pytube أثناء التحميل: {str(e)}")
+            return None
+    
+    def download_audio(self, url: str, format_id: str) -> Optional[str]:
         """
-        تحميل الصوت فقط من فيديو YouTube.
+        تحميل الصوت
         
         Args:
-            url: رابط فيديو YouTube
-            format_id: معرف تنسيق الصوت
-            progress_callback: دالة استدعاء لتحديث التقدم
+            url: رابط الفيديو
+            format_id: معرف التنسيق
             
         Returns:
-            مسار ملف الصوت المحمل أو None إذا فشلت العملية
+            مسار الملف المحمل أو None في حالة الفشل
         """
+        logger.info(f"بدء تحميل الصوت من {url} بتنسيق {format_id}")
+        
         try:
-            # إنشاء اسم ملف فريد
-            file_id = str(uuid.uuid4())
-            output_path = os.path.join(self.download_path, f"{file_id}.mp3")
-            
-            # تكوين خيارات yt-dlp
-            ydl_opts = {
-                'format': format_id,
-                'outtmpl': output_path,
-                'quiet': False,  # تمكين الإخراج للتصحيح
-                'no_warnings': False,  # عرض التحذيرات للتصحيح
-                'verbose': True,  # تمكين الإخراج المفصل
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-            }
-            
-            # إضافة دالة استدعاء التقدم إذا تم توفيرها
-            if progress_callback:
-                ydl_opts['progress_hooks'] = [
-                    lambda d: progress_callback(d['status'], d.get('downloaded_bytes', 0), 
-                                               d.get('total_bytes', 0), d.get('eta', 0))
-                ]
-            
-            # تحميل الصوت
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-                
-                # التحقق من وجود الملف
-                if os.path.exists(output_path):
-                    return output_path
-                
-                # البحث عن الملف بامتداد مختلف
-                for ext in ['.mp3', '.m4a', '.webm']:
-                    potential_path = os.path.join(self.download_path, f"{file_id}{ext}")
-                    if os.path.exists(potential_path):
-                        return potential_path
-                
-                return None
-                
+            if USE_YT_DLP:
+                return self._download_audio_ytdlp(url, format_id)
+            else:
+                return self._download_audio_pytube(url, format_id)
         except Exception as e:
             logger.error(f"خطأ في تحميل الصوت: {str(e)}")
             return None
     
-    def cleanup_old_files(self, expiry_seconds: int = 86400) -> None:
-        """
-        تنظيف الملفات القديمة من مجلد التحميل.
+    def _download_audio_ytdlp(self, url: str, format_id: str) -> Optional[str]:
+        """تحميل الصوت باستخدام yt-dlp"""
+        # إنشاء اسم ملف فريد
+        timestamp = int(time.time())
+        output_template = os.path.join(self.download_path, f'audio_{timestamp}_%(id)s.%(ext)s')
         
-        Args:
-            expiry_seconds: عدد الثواني بعد إنشاء الملف قبل اعتباره قديمًا
-        """
+        ydl_opts = {
+            'format': format_id,
+            'outtmpl': output_template,
+            'quiet': False,
+            'no_warnings': False,
+            'ignoreerrors': True,
+            'nooverwrites': True,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }] if self.has_ffmpeg else [],
+            'progress_hooks': [self._progress_hook],
+        }
+        
         try:
-            current_time = time.time()
-            for filename in os.listdir(self.download_path):
-                file_path = os.path.join(self.download_path, filename)
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                logger.info(f"بدء تحميل الصوت باستخدام yt-dlp: {url}")
+                info = ydl.extract_info(url, download=True)
                 
-                # تخطي المجلدات
-                if os.path.isdir(file_path):
-                    continue
-                    
-                # التحقق من عمر الملف
-                file_age = current_time - os.path.getctime(file_path)
-                if file_age > expiry_seconds:
-                    os.remove(file_path)
-                    logger.info(f"تم حذف الملف القديم: {filename}")
-                    
+                if info is None:
+                    logger.error("فشل في استخراج معلومات الفيديو")
+                    return None
+                
+                # الحصول على مسار الملف المحمل
+                if 'requested_downloads' in info and info['requested_downloads']:
+                    file_path = info['requested_downloads'][0].get('filepath')
+                    if file_path and os.path.exists(file_path):
+                        logger.info(f"تم تحميل الصوت بنجاح: {file_path}")
+                        return file_path
+                
+                # محاولة بديلة للعثور على الملف
+                video_id = info.get('id', '')
+                ext = 'mp3' if self.has_ffmpeg else info.get('ext', 'mp3')
+                expected_file = os.path.join(self.download_path, f'audio_{timestamp}_{video_id}.{ext}')
+                
+                if os.path.exists(expected_file):
+                    logger.info(f"تم العثور على الملف المحمل: {expected_file}")
+                    return expected_file
+                
+                logger.error("لم يتم العثور على الملف المحمل")
+                return None
         except Exception as e:
-            logger.error(f"خطأ في تنظيف الملفات القديمة: {str(e)}")
+            logger.error(f"خطأ في yt-dlp أثناء تحميل الصوت: {str(e)}")
+            return None
     
-    def is_valid_youtube_url(self, url: str) -> bool:
-        """
-        التحقق مما إذا كان الرابط هو رابط YouTube صالح.
-        
-        Args:
-            url: الرابط المراد التحقق منه
-            
-        Returns:
-            True إذا كان الرابط صالحًا، False خلاف ذلك
-        """
+    def _download_audio_pytube(self, url: str, format_id: str) -> Optional[str]:
+        """تحميل الصوت باستخدام pytube"""
         try:
-            # التحقق من وجود youtube.com أو youtu.be في الرابط
-            if 'youtube.com' not in url and 'youtu.be' not in url:
-                return False
-                
-            # محاولة استخراج معلومات الفيديو
-            with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
-                ydl.extract_info(url, download=False, process=False)
-                return True
-                
-        except Exception:
-            return False
+            yt = pytube.YouTube(url)
+            stream = yt.streams.get_by_itag(int(format_id))
             
-        return False
+            if not stream:
+                logger.error(f"لم يتم العثور على التنسيق المطلوب: {format_id}")
+                return None
+            
+            # تحميل الصوت
+            logger.info(f"بدء تحميل الصوت باستخدام pytube: {url}")
+            file_path = stream.download(output_path=self.download_path)
+            
+            # تحويل إلى MP3 إذا كان FFmpeg متاحًا
+            if self.has_ffmpeg and os.path.exists(file_path):
+                try:
+                    mp3_path = os.path.splitext(file_path)[0] + '.mp3'
+                    cmd = [
+                        'ffmpeg', '-i', file_path, 
+                        '-vn', '-ab', '192k', 
+                        '-ar', '44100', '-y', mp3_path
+                    ]
+                    
+                    subprocess.run(
+                        cmd, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE,
+                        check=True
+                    )
+                    
+                    # حذف الملف الأصلي
+                    os.remove(file_path)
+                    file_path = mp3_path
+                except Exception as e:
+                    logger.error(f"خطأ في تحويل الملف إلى MP3: {str(e)}")
+            
+            if os.path.exists(file_path):
+                logger.info(f"تم تحميل الصوت بنجاح: {file_path}")
+                return file_path
+            else:
+                logger.error("لم يتم العثور على الملف المحمل")
+                return None
+        except Exception as e:
+            logger.error(f"خطأ في pytube أثناء تحميل الصوت: {str(e)}")
+            return None
+    
+    def _progress_hook(self, d):
+        """تتبع تقدم التحميل"""
+        if d['status'] == 'downloading':
+            if 'total_bytes' in d and d['total_bytes'] > 0:
+                percent = d['downloaded_bytes'] / d['total_bytes'] * 100
+                logger.info(f"تقدم التحميل: {percent:.1f}%")
+            elif 'total_bytes_estimate' in d and d['total_bytes_estimate'] > 0:
+                percent = d['downloaded_bytes'] / d['total_bytes_estimate'] * 100
+                logger.info(f"تقدم التحميل (تقديري): {percent:.1f}%")
+            else:
+                logger.info(f"تم تحميل {d['downloaded_bytes'] / (1024*1024):.1f} ميجابايت")
+        elif d['status'] == 'finished':
+            logger.info(f"اكتمل التحميل. حجم الملف: {d['downloaded_bytes'] / (1024*1024):.1f} ميجابايت")
+        elif d['status'] == 'error':
+            logger.error(f"خطأ في التحميل: {d.get('error', 'خطأ غير معروف')}")
