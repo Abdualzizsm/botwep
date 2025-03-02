@@ -2,6 +2,9 @@ import os
 import asyncio
 from bot.telegram_bot import main as _start_bot
 
+# تصدير الدالة start_bot للاستخدام من خارج الوحدة
+__all__ = ['start_bot']
+
 def start_bot():
     """
     بدء تشغيل البوت مع التحقق من متغير البيئة BOT_ENABLED

@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 # إضافة المجلد الرئيسي إلى مسار البحث
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# استيراد البوت
-from bot import bot
+# استيراد دالة تشغيل البوت
+from bot import start_bot
 
 # تشغيل البوت في خيط منفصل فقط إذا لم يكن هناك نسخة أخرى تعمل
 def run_bot():
@@ -24,7 +24,7 @@ def run_bot():
     """
     try:
         # تشغيل البوت من خلال الدالة المعرفة في bot/__init__.py
-        bot.start_bot()
+        start_bot()
     except Exception as e:
         logger.error(f"خطأ في تشغيل بوت التلغرام: {str(e)}")
 
